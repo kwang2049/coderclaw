@@ -166,6 +166,7 @@ CoderClaw adopts the memory self-updating behavior at the agent-instruction leve
 4. Under `OAuth & Permissions`, add these bot token scopes:
    - `app_mentions:read`
    - `chat:write`
+   - `reactions:write`
 5. Install the app to the workspace and copy the `Bot User OAuth Token`.
 6. Export the values before starting the server:
 
@@ -218,6 +219,8 @@ Current Slack behavior:
 - verifies Slack request signatures when `SLACK_SIGNING_SECRET` is set
 - accepts `app_mention` events
 - normalizes the mention text into a queue message
+- reacts with `:eyes:` while a request is running
+- replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
 - runs the message through the Codex runtime adapter
 - posts the result back into the same Slack thread
 

@@ -85,10 +85,25 @@ class SlackAdapter:
             reply_target=ReplyTarget(
                 channel=ChannelName.SLACK,
                 channel_id=channel_id,
+                message_ts=event_ts,
                 thread_ts=str(event.get("thread_ts", event_ts)),
                 user_id=user_id,
             ),
         )
+
+    def add_reaction(self, channel_id: str, timestamp: str, emoji_name: str) -> None:
+        self._api_post(
+            "https://slack.com/api/reactions.add",
+            {"channel": channel_id, "timestamp": timestamp, "name": emoji_name},
+        )
+        self._logger.info("added Slack reaction channel=%s ts=%s emoji=%s", channel_id, timestamp, emoji_name)
+
+    def remove_reaction(self, channel_id: str, timestamp: str, emoji_name: str) -> None:
+        self._api_post(
+            "https://slack.com/api/reactions.remove",
+            {"channel": channel_id, "timestamp": timestamp, "name": emoji_name},
+        )
+        self._logger.info("removed Slack reaction channel=%s ts=%s emoji=%s", channel_id, timestamp, emoji_name)
 
     def post_message(self, channel_id: str, text: str, thread_ts: str | None = None) -> None:
         if not self._bot_token:
@@ -98,8 +113,16 @@ class SlackAdapter:
         if thread_ts:
             body["thread_ts"] = thread_ts
 
+        self._api_post("https://slack.com/api/chat.postMessage", body)
+
+        self._logger.info("posted Slack reply channel=%s thread_ts=%s", channel_id, thread_ts)
+
+    def _api_post(self, url: str, body: dict[str, object]) -> dict[str, object]:
+        if not self._bot_token:
+            raise RuntimeError("SLACK_BOT_TOKEN is not set")
+
         request = urllib.request.Request(
-            "https://slack.com/api/chat.postMessage",
+            url,
             data=json.dumps(body).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {self._bot_token}",
@@ -114,6 +137,8 @@ class SlackAdapter:
             raise RuntimeError(f"Slack API request failed: {exc}") from exc
 
         if not payload.get("ok"):
+            if payload.get("error") in {"already_reacted", "no_reaction"}:
+                return payload
             raise RuntimeError(f"Slack API error: {payload}")
 
-        self._logger.info("posted Slack reply channel=%s thread_ts=%s", channel_id, thread_ts)
+        return payload

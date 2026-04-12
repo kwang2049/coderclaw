@@ -12,6 +12,7 @@ class ChannelName(StrEnum):
 class ReplyTarget:
     channel: ChannelName
     channel_id: str
+    message_ts: str
     thread_ts: str | None
     user_id: str | None
 
@@ -30,4 +31,3 @@ class InboundMessage:
 class AgentResult:
     output_text: str
     raw_output: str
-
