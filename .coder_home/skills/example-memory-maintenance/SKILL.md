@@ -1,3 +1,8 @@
+---
+name: memory-maintenance
+description: Curate CoderClaw Markdown memory files.
+---
+
 # Memory Maintenance
 
 Use this skill when the task involves curating CoderClaw's Markdown memory.
