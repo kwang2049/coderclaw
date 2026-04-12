@@ -11,7 +11,7 @@ CoderClaw is a local-first agentic system that wraps an existing coding agent CL
 The initial target agent is Codex, invoked through a command such as:
 
 ```bash
-codex exec --skip-git-repo-check "$PROMPT"
+codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
 ```
 
 The architecture must stay extensible so other agent runtimes can be added later, including Claude Code, Gemini CLI, and Kiro CLI.
@@ -41,4 +41,3 @@ Memory maintenance rules:
 - keep changes auditable and reversible where practical
 - use Python 3.11 with a local `.venv` workflow unless the user explicitly directs otherwise
 - treat `.coder_home` as the shared agent-home root; product-specific conventional homes may symlink here
-

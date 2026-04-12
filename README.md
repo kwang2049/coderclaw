@@ -226,7 +226,7 @@ Current Slack behavior:
 The first runtime adapter shells out to:
 
 ```bash
-codex exec --skip-git-repo-check "$PROMPT"
+codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
 ```
 
 CoderClaw runs Codex with a project-local `CODEX_HOME` rooted at `.coder_home`.

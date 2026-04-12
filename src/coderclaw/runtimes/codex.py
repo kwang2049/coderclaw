@@ -20,10 +20,12 @@ class CodexRuntime:
         command = [
             self._codex_bin,
             "exec",
+            "-s",
+            "danger-full-access",
             "--skip-git-repo-check",
             prompt,
         ]
-        self._logger.info("running Codex runtime command=%s", command[:3])
+        self._logger.info("running Codex runtime command=%s", command[:5])
         completed = subprocess.run(
             command,
             cwd=self._repo_root,
