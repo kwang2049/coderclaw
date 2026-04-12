@@ -8,7 +8,6 @@ from pathlib import Path
 def ensure_agent_home_layout(repo_root: Path, coder_home_root: Path, codex_home: Path) -> None:
     logger = logging.getLogger(__name__)
     coder_home_root.mkdir(parents=True, exist_ok=True)
-    (coder_home_root / "shared").mkdir(parents=True, exist_ok=True)
     codex_home.mkdir(parents=True, exist_ok=True)
 
     codex_symlink = repo_root / ".codex"
@@ -24,4 +23,3 @@ def ensure_agent_home_layout(repo_root: Path, coder_home_root: Path, codex_home:
         logger.info("created .codex symlink -> %s", target)
     except OSError as exc:
         logger.warning("failed to create .codex symlink: %s", exc)
-

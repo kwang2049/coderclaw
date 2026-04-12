@@ -41,12 +41,14 @@ class SessionOrchestrator:
 
     def _build_prompt(self, message: InboundMessage) -> str:
         memory_context = self._memory_store.load_context()
+        memory_update_policy = self._memory_store.describe_update_policy()
         policy_guidance = self._policy.guidance()
         return "\n\n".join(
             part
             for part in [
                 "You are running inside CoderClaw through a Slack-driven local orchestration layer.",
                 f"Persistent memory:\n{memory_context}" if memory_context else "",
+                f"Memory update policy:\n{memory_update_policy}",
                 f"Policy guidance:\n{policy_guidance}",
                 f"User request from {message.channel.value}:\n{message.text}",
             ]

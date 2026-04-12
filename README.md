@@ -22,7 +22,7 @@ The repository now includes a minimal Python service with:
 - a session orchestrator
 - a Codex runtime adapter
 - a watchdog thread for stale-component and source-change detection
-- a persistent memory file used during prompt construction
+- Markdown steering and memory files loaded from `.coder_home`, with daily memory kept outside it
 
 The implementation is intentionally small and stdlib-first so the first end-to-end loop stays easy to run locally.
 
@@ -48,10 +48,13 @@ flowchart LR
 ```text
 .
 .coder_home/
-  shared/
-  codex/
+  AGENTS.md
+  MEMORY.md
+  skills/
+    <skill>/
+      SKILL.md
 memory/
-  system.md
+  daily/
 src/
   coderclaw/
     channels/
@@ -89,6 +92,7 @@ Useful optional variables:
 - `CODERCLAW_HOME_ROOT`
 - `CODERCLAW_CODEX_HOME`
 - `CODERCLAW_MEMORY_FILE`
+- `CODERCLAW_DAILY_MEMORY_DIR`
 - `CODERCLAW_CODEX_BIN`
 - `CODERCLAW_CODEX_TIMEOUT_SECONDS`
 
@@ -109,23 +113,50 @@ CoderClaw uses a shared project-local `.coder_home` directory for coding agent p
 
 Current convention:
 
-- `.coder_home/shared/` for cross-agent project-local resources
-- `.coder_home/codex/` as the Codex-specific home
-- `.codex` as a convenience symlink to `.coder_home/codex` when available
+- `.coder_home/` is the shared agent-home root
+- `.coder_home/AGENTS.md` is canonical steering
+- `.coder_home/MEMORY.md` is canonical long-term memory
+- `.coder_home/skills/` stores portable Markdown-first skills
+- `.codex` can be a convenience symlink to `.coder_home` when needed
 
 When CoderClaw launches Codex, it sets:
 
 ```text
-CODEX_HOME=.coder_home/codex
+CODEX_HOME=.coder_home
 ```
 
-This keeps project-specific steering close to the repository while preserving a path for future agent-specific homes such as `.coder_home/claude-code/` or `.coder_home/gemini/`.
+This keeps project-specific steering close to the repository while preserving a path for future agent-specific conventional names through symlinks.
 
 Important operational note:
 
 - treat `.coder_home` as local runtime state
-- commit only intentional steering files such as tracked `README.md` and `AGENTS.md`
+- do not treat `.coder_home` as the canonical source for steering or memory
 - do not commit auth tokens, caches, or generated logs from agent CLIs
+
+## 6.2 Markdown Usage Model
+
+CoderClaw now uses an OpenClaw-inspired Markdown layout with one deliberate simplification: steering stays merged into a single `AGENTS.md`.
+
+The repository conventions are:
+
+- `.coder_home/AGENTS.md`
+  - canonical merged steering file
+  - absorbs the role we would otherwise split across extra files such as `SOUL.md` and `TOOLS.md`
+- `.coder_home/MEMORY.md`
+  - curated long-term memory
+  - use for durable facts, stable preferences, and lasting design decisions
+- `memory/daily/YYYY-MM-DD.md`
+  - daily working memory
+  - use for short-horizon notes, current context, and observations that may later be promoted to `.coder_home/MEMORY.md`
+- `.coder_home/skills/<skill>/SKILL.md`
+  - canonical portable skill format
+  - keeps skills Markdown-first and adaptable across different coding agent products
+
+CoderClaw adopts the memory self-updating behavior at the agent-instruction level:
+
+- if a task implies `remember this`, the agent should update the appropriate Markdown memory file as part of the task
+- memory updates happen through normal file edits
+- CoderClaw does not currently implement OpenClaw-style programmatic pre-compaction memory flushing
 
 ## 7. Set Up The Slack Bot
 
@@ -198,7 +229,7 @@ The first runtime adapter shells out to:
 codex exec --skip-git-repo-check "$PROMPT"
 ```
 
-CoderClaw runs Codex with a project-local `CODEX_HOME` rooted at `.coder_home/codex`.
+CoderClaw runs Codex with a project-local `CODEX_HOME` rooted at `.coder_home`.
 
 This is an implementation detail behind the runtime boundary, not a permanent system constraint.
 

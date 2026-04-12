@@ -9,9 +9,7 @@ __pycache__/
 .pytest_cache/
 .codex
 .coder_home/*
-!.coder_home/README.md
-!.coder_home/shared/
-!.coder_home/shared/README.md
-!.coder_home/codex/
-!.coder_home/codex/README.md
-!.coder_home/codex/AGENTS.md
+!.coder_home/AGENTS.md
+!.coder_home/MEMORY.md
+!.coder_home/skills/
+!.coder_home/skills/**

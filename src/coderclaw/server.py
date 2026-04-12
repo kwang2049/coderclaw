@@ -30,6 +30,10 @@ class CoderClawApp:
                 config.repo_root / "src",
                 config.repo_root / "README.md",
                 config.repo_root / "AGENTS.md",
+                config.coder_home_root / "AGENTS.md",
+                config.memory_file,
+                config.daily_memory_dir,
+                config.coder_home_root / "skills",
             ],
             interval_seconds=config.watchdog_interval_seconds,
             stale_seconds=config.watchdog_stale_seconds,
@@ -41,7 +45,7 @@ class CoderClawApp:
                 codex_home=config.codex_home,
                 timeout_seconds=config.codex_timeout_seconds,
             ),
-            memory_store=MemoryStore(config.memory_file),
+            memory_store=MemoryStore(config.memory_file, config.daily_memory_dir),
             policy=SelfImprovementPolicy(),
             slack=self._slack,
             watchdog=self._watchdog,
@@ -74,6 +78,7 @@ class CoderClawApp:
             "coder_home_root": str(self._config.coder_home_root),
             "codex_home": str(self._config.codex_home),
             "memory_file": str(self._config.memory_file),
+            "daily_memory_dir": str(self._config.daily_memory_dir),
         }
 
     def handle_slack_event(self, raw_body: bytes, headers: dict[str, str]) -> tuple[int, dict[str, object]]:
