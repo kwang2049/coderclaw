@@ -14,6 +14,8 @@ codex exec --skip-git-repo-check "$PROMPT"
 
 The architecture must stay extensible so other agent runtimes can be added later, including Claude Code, Gemini CLI, and Kiro CLI.
 
+The first communication channel for implementation is Slack.
+
 ## Product Constraints
 
 - The agent runtime and server program run on the user's own laptop or desktop.
@@ -91,23 +93,29 @@ Self-improvement is a first-class feature, but it must stay bounded.
 - Avoid premature framework complexity before the first end-to-end loop works locally.
 - Default to portable tooling and straightforward local development commands.
 - Add dependencies only when they clearly reduce complexity or operational risk.
+- Use Python 3.11 with a local `.venv` workflow for this repository unless the user explicitly directs a change.
+- Prefer Python standard library primitives for the bootstrap stage when they keep the system simple.
+- Use a shared project-local `.coder_home` directory for agent-home state, with agent-specific subdirectories such as `.coder_home/codex`.
+- When an agent CLI expects a conventional home folder name, prefer a symlink from that conventional name to the corresponding `.coder_home/<agent>` directory.
 
 ## Expected Initial Layout
 
 As the project grows, favor a structure close to:
 
 ```text
-docs/
+.coder_home/
+memory/
 src/
-  channels/
-  queue/
-  runtimes/
-  orchestrator/
-  watchdog/
-  memory/
-  policy/
-scripts/
-tests/
+  coderclaw/
+    channels/
+    runtimes/
+    config.py
+    memory.py
+    orchestrator.py
+    policy.py
+    queue.py
+    server.py
+    watchdog.py
 ```
 
 The exact layout may change, but keep the subsystem boundaries recognizable.
@@ -116,7 +124,7 @@ The exact layout may change, but keep the subsystem boundaries recognizable.
 
 1. Define the end-to-end local architecture.
 2. Implement a Codex runtime adapter.
-3. Add one communication channel adapter.
+3. Add Slack as the first communication channel adapter.
 4. Introduce a centralized message queue.
 5. Add watchdog supervision and restart behavior.
 6. Define memory files and self-improvement rules.

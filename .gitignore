@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.codex
+.coder_home/*
+!.coder_home/README.md
+!.coder_home/shared/
+!.coder_home/shared/README.md
+!.coder_home/codex/
+!.coder_home/codex/README.md
+!.coder_home/codex/AGENTS.md
