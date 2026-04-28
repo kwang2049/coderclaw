@@ -8,7 +8,9 @@ version = "0.1.0"
 description = "Local-first agentic coding system with Slack as the first communication channel."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
-dependencies = []
+dependencies = [
+    "slack_sdk>=3.36,<4",
+]
 
 [project.scripts]
 coderclaw = "coderclaw.__main__:main"

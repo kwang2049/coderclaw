@@ -17,6 +17,7 @@ codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
 The architecture must stay extensible so other agent runtimes can be added later, including Claude Code, Gemini CLI, and Kiro CLI.
 
 The first communication channel for implementation is Slack.
+Slack should connect through Socket Mode so the local-first deployment does not depend on a public webhook tunnel for normal Slack operation.
 
 ## Markdown Conventions
 

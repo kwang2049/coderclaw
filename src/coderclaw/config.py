@@ -38,7 +38,7 @@ class AppConfig:
     watchdog_interval_seconds: int
     watchdog_stale_seconds: int
     slack_bot_token: str | None
-    slack_signing_secret: str | None
+    slack_app_token: str | None
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -61,5 +61,5 @@ class AppConfig:
             watchdog_interval_seconds=_env_int("CODERCLAW_WATCHDOG_INTERVAL_SECONDS", 5),
             watchdog_stale_seconds=_env_int("CODERCLAW_WATCHDOG_STALE_SECONDS", 60),
             slack_bot_token=os.getenv("SLACK_BOT_TOKEN"),
-            slack_signing_secret=os.getenv("SLACK_SIGNING_SECRET"),
+            slack_app_token=os.getenv("SLACK_APP_TOKEN"),
         )

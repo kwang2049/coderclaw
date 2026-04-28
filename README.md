@@ -17,21 +17,22 @@ Most coding agents assume the user is operating the terminal directly. CoderClaw
 
 The repository now includes a minimal Python service with:
 
-- a Slack events endpoint
+- a Slack Socket Mode client
 - an in-memory message queue
 - a session orchestrator
 - a Codex runtime adapter
 - a watchdog thread for stale-component and source-change detection
+- a local health endpoint
 - Markdown steering and memory files loaded from `.coder_home`, with daily memory kept outside it
 
-The implementation is intentionally small and stdlib-first so the first end-to-end loop stays easy to run locally.
+The implementation stays intentionally small, but Slack integration now uses the official Slack SDK because Socket Mode is the cleanest way to avoid exposing a public webhook URL from the user's laptop.
 
 ## 3. System Model
 
 ```mermaid
 flowchart LR
     U[Slack User] --> S[Slack App]
-    S --> A[Slack Adapter]
+    S <--> A[Slack Socket Mode Client]
     A --> Q[In-Memory Queue]
     Q --> O[Session Orchestrator]
     O --> R[Codex Runtime Adapter]
@@ -82,7 +83,7 @@ cp .env.example .env
 Set the required environment variables in your shell or `.env` loader of choice:
 
 - `SLACK_BOT_TOKEN`
-- `SLACK_SIGNING_SECRET`
+- `SLACK_APP_TOKEN`
 
 Useful optional variables:
 
@@ -101,11 +102,11 @@ Useful optional variables:
 ```bash
 source .venv/bin/activate
 export SLACK_BOT_TOKEN=...
-export SLACK_SIGNING_SECRET=...
+export SLACK_APP_TOKEN=...
 coderclaw
 ```
 
-By default the service listens on `http://127.0.0.1:8787`.
+By default the local health server listens on `http://127.0.0.1:8787`.
 
 ## 6.1 Shared Agent Home
 
@@ -162,43 +163,29 @@ CoderClaw adopts the memory self-updating behavior at the agent-instruction leve
 
 1. Create a Slack app at `api.slack.com/apps`.
 2. Choose the workspace where you want to test CoderClaw.
-3. Under `Basic Information`, copy the `Signing Secret`.
-4. Under `OAuth & Permissions`, add these bot token scopes:
+3. Under `OAuth & Permissions`, add these bot token scopes:
    - `app_mentions:read`
    - `chat:write`
    - `reactions:write`
-5. Install the app to the workspace and copy the `Bot User OAuth Token`.
-6. Export the values before starting the server:
+4. Install the app to the workspace and copy the `Bot User OAuth Token`.
+5. Export the value before starting the server:
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...
-export SLACK_SIGNING_SECRET=...
 ```
 
-7. Expose your local service to Slack.
-
-If you are testing from your laptop, Slack needs a public HTTPS URL that forwards to your local server. A common option is:
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:8787
-```
-
-You can use any equivalent tunnel as long as Slack can reach `POST /slack/events`.
-
-8. In Slack app settings, open `Event Subscriptions` and enable events.
-9. Set the request URL to:
-
-```text
-https://your-public-url/slack/events
-```
-
-Slack will send a URL verification request, which the current server handles automatically.
-
-10. Subscribe to the bot event `app_mention`.
-11. Click `Save changes`.
-12. Reinstall the app if Slack asks for updated permissions.
-13. Add the app to a channel in Slack.
-14. Mention the bot in that channel with a coding request.
+6. Under `Basic Information`, create an app-level token with the scope `connections:write`.
+7. Copy the app-level token and export it as `SLACK_APP_TOKEN`.
+8. Under `Socket Mode`, enable Socket Mode for the app.
+9. Under `App Home`, turn on the `Messages Tab` if you want direct messages to work.
+10. Under `Event Subscriptions`, enable events.
+11. Subscribe to these bot events:
+   - `app_mention`
+   - `message.im`
+12. Click `Save changes`.
+13. Reinstall the app if Slack asks for updated permissions.
+14. Add the app to a channel in Slack.
+15. Mention the bot in that channel or send it a direct message.
 
 Example:
 
@@ -206,19 +193,24 @@ Example:
 @CoderClaw summarize the current README and suggest the next scaffold step
 ```
 
+Direct-message example:
+
+```text
+summarize this repo and suggest the next change
+```
+
 ## 8. Slack Integration
 
 Current HTTP routes:
 
 - `GET /healthz`
-- `POST /slack/events`
 
 Current Slack behavior:
 
-- responds to Slack URL verification requests
-- verifies Slack request signatures when `SLACK_SIGNING_SECRET` is set
-- accepts `app_mention` events
-- normalizes the mention text into a queue message
+- opens an outbound Socket Mode connection to Slack using `SLACK_APP_TOKEN`
+- accepts `app_mention` events in channels
+- accepts direct messages through `message.im`
+- normalizes the message text into a queue message
 - reacts with `:eyes:` while a request is running
 - replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
 - runs the message through the Codex runtime adapter

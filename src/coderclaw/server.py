@@ -23,7 +23,7 @@ class CoderClawApp:
         self._logger = logging.getLogger(__name__)
         self._slack = SlackAdapter(
             bot_token=config.slack_bot_token,
-            signing_secret=config.slack_signing_secret,
+            app_token=config.slack_app_token,
         )
         self._watchdog = Watchdog(
             watch_paths=[
@@ -59,14 +59,16 @@ class CoderClawApp:
             codex_home=self._config.codex_home,
         )
         self._queue.start(self._orchestrator.handle_message)
+        self._slack.start_socket_mode(self._queue.put)
         self._watchdog.record_heartbeat("server")
         self._watchdog.start()
         if not self._config.slack_bot_token:
             self._logger.warning("SLACK_BOT_TOKEN is not configured; Slack replies will fail")
-        if not self._config.slack_signing_secret:
-            self._logger.warning("SLACK_SIGNING_SECRET is not configured; non-verification events are insecure")
+        if not self._config.slack_app_token:
+            self._logger.warning("SLACK_APP_TOKEN is not configured; Slack Socket Mode will not connect")
 
     def stop(self) -> None:
+        self._slack.stop_socket_mode()
         self._queue.stop()
         self._watchdog.stop()
 
@@ -74,29 +76,14 @@ class CoderClawApp:
         return {
             "status": "ok",
             "channel": "slack",
+            "slack_transport": "socket_mode",
+            "slack_connected": self._slack.is_socket_mode_connected(),
             "runtime": "codex",
             "coder_home_root": str(self._config.coder_home_root),
             "codex_home": str(self._config.codex_home),
             "memory_file": str(self._config.memory_file),
             "daily_memory_dir": str(self._config.daily_memory_dir),
         }
-
-    def handle_slack_event(self, raw_body: bytes, headers: dict[str, str]) -> tuple[int, dict[str, object]]:
-        self._watchdog.record_heartbeat("server")
-        payload = self._slack.decode(raw_body)
-        if payload.get("type") == "url_verification":
-            return HTTPStatus.OK, {"challenge": payload.get("challenge", "")}
-        if not self._slack.verify_signature(raw_body, headers):
-            return HTTPStatus.UNAUTHORIZED, {"ok": False, "error": "invalid_slack_signature"}
-
-        message = self._slack.extract_message(payload)
-        if not message:
-            self._logger.info("ignored Slack payload type=%s", payload.get("type"))
-            return HTTPStatus.OK, {"ok": True, "ignored": True}
-
-        self._queue.put(message)
-        self._logger.info("queued Slack message id=%s", message.message_id)
-        return HTTPStatus.ACCEPTED, {"ok": True, "queued": True, "message_id": message.message_id}
 
 
 def build_handler(app: CoderClawApp) -> type[BaseHTTPRequestHandler]:
@@ -105,18 +92,11 @@ def build_handler(app: CoderClawApp) -> type[BaseHTTPRequestHandler]:
             if self.path != "/healthz":
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
+            app._watchdog.record_heartbeat("server")
             self._send_json(HTTPStatus.OK, app.health())
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path != "/slack/events":
-                self.send_error(HTTPStatus.NOT_FOUND)
-                return
-
-            content_length = int(self.headers.get("Content-Length", "0"))
-            raw_body = self.rfile.read(content_length)
-            headers = {key.lower(): value for key, value in self.headers.items()}
-            status, payload = app.handle_slack_event(raw_body, headers)
-            self._send_json(status, payload)
+            self.send_error(HTTPStatus.NOT_FOUND)
 
         def log_message(self, format: str, *args: object) -> None:
             logging.getLogger("http").info("%s - %s", self.address_string(), format % args)
@@ -139,7 +119,11 @@ def main() -> None:
     app.start()
 
     server = ThreadingHTTPServer((config.host, config.port), build_handler(app))
-    logging.getLogger(__name__).info("CoderClaw listening on http://%s:%s", config.host, config.port)
+    logging.getLogger(__name__).info(
+        "CoderClaw listening on http://%s:%s with Slack Socket Mode",
+        config.host,
+        config.port,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
