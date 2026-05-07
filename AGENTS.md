@@ -1,35 +1,61 @@
 # AGENTS.md
 
-This root file is a repository compatibility layer.
+This file is the static prompt entrypoint for CoderClaw.
 
-Canonical steering for coding agent products lives in:
-
-```text
-.coder_home/AGENTS.md
-```
-
-Canonical long-term memory lives in:
-
-```text
-.coder_home/MEMORY.md
-```
-
-Canonical portable skills live in:
-
-```text
-.coder_home/skills/
-```
-
-Daily working memory remains outside the agent-home directory:
-
-```text
-memory/daily/YYYY-MM-DD.md
-```
+Record static prompt guidance directly in this file, organized by section.
 
 Repository rules:
 
-- keep `README.md` aligned with `.coder_home/AGENTS.md`
-- if you update Markdown steering or long-term memory conventions, update both this file and `.coder_home/AGENTS.md` in the same work session
+- keep `README.md` aligned with this `AGENTS.md` contract
 - do not reintroduce separate `SOUL.md` or `TOOLS.md` files unless explicitly requested
 - do not implement programmatic memory flushing unless explicitly requested
-- treat `.coder_home` as the shared agent-home root for coding agent products
+- keep `.coder_home/` limited to coding-agent skills
+
+## Project Intent
+
+CoderClaw is a local-first agentic system that wraps an existing coding agent CLI as the execution core while exposing the user experience through external communication channels such as Slack, Discord, and email.
+
+The initial target agent is Codex, invoked through a command such as:
+
+```bash
+codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
+```
+
+The architecture must stay extensible so other agent runtimes can be added later, including Claude Code, Gemini CLI, and Kiro CLI.
+
+The first communication channel for implementation is Slack.
+Slack should connect through Socket Mode so the local-first deployment does not depend on a public webhook tunnel for normal Slack operation.
+
+## Context Model
+
+Use `AGENTS.md` as the static prompt contract.
+
+Dynamic context is referenced from here and should be consulted only when useful for the task:
+
+- `MEMORY.md` stores curated long-term memory and durable project conventions.
+- `memory/daily/YYYY-MM-DD.md` stores daily working context and short-horizon notes.
+- `.coder_home/skills/<skill>/SKILL.md` stores portable coding-agent skills following the chosen agent's official skill/home convention.
+- `.agents/skills` may be used as a compatibility path for agent-specific repo conventions, backed by the shared `.coder_home/skills/` store.
+
+For any new coding agent choice, first refer to that agent's official guide for setting up project- or workspace-level skills before deciding the local `.coder_home/skills/` layout.
+
+Example:
+
+- Codex skills guide: `https://developers.openai.com/codex/skills`
+
+Memory maintenance rules:
+
+- durable facts, stable preferences, and lasting design decisions belong in `MEMORY.md`
+- short-horizon notes and daily context belong in `memory/daily/YYYY-MM-DD.md`
+- if the user says `remember this`, update the appropriate Markdown memory file as part of the task
+- do not rely on hidden memory as the source of truth
+
+## Engineering Rules
+
+- keep the system local-first
+- preserve runtime-agnostic boundaries between agent adapters and orchestration
+- prefer updating `AGENTS.md` or Markdown memory before broader code mutation
+- keep changes auditable and reversible where practical
+- use Python 3.11 with a local `.venv` workflow unless the user explicitly directs otherwise
+- keep `.coder_home/skills/` as the durable customization surface under `.coder_home`
+- `conclude the session` means update the relevant Markdown files to reflect current project status, then create a git commit

@@ -3,9 +3,7 @@ from __future__ import annotations
 import logging
 
 from coderclaw.channels.slack import SlackAdapter
-from coderclaw.memory import MemoryStore
 from coderclaw.models import ChannelName, InboundMessage
-from coderclaw.policy import SelfImprovementPolicy
 from coderclaw.runtimes.base import AgentRuntime
 from coderclaw.watchdog import Watchdog
 
@@ -18,14 +16,10 @@ class SessionOrchestrator:
     def __init__(
         self,
         runtime: AgentRuntime,
-        memory_store: MemoryStore,
-        policy: SelfImprovementPolicy,
         slack: SlackAdapter,
         watchdog: Watchdog,
     ) -> None:
         self._runtime = runtime
-        self._memory_store = memory_store
-        self._policy = policy
         self._slack = slack
         self._watchdog = watchdog
         self._logger = logging.getLogger(__name__)
@@ -47,16 +41,10 @@ class SessionOrchestrator:
         self._reply(message, result.output_text)
 
     def _build_prompt(self, message: InboundMessage) -> str:
-        memory_context = self._memory_store.load_context()
-        memory_update_policy = self._memory_store.describe_update_policy()
-        policy_guidance = self._policy.guidance()
         return "\n\n".join(
             part
             for part in [
                 "You are running inside CoderClaw through a Slack-driven local orchestration layer.",
-                f"Persistent memory:\n{memory_context}" if memory_context else "",
-                f"Memory update policy:\n{memory_update_policy}",
-                f"Policy guidance:\n{policy_guidance}",
                 f"User request from {message.channel.value}:\n{message.text}",
             ]
             if part

@@ -31,3 +31,15 @@ class InboundMessage:
 class AgentResult:
     output_text: str
     raw_output: str
+    metadata: RuntimeExecutionMetadata | None = None
+
+
+@dataclass(frozen=True)
+class RuntimeExecutionMetadata:
+    runtime_name: str
+    command: list[str]
+    cwd: str
+    started_at: str
+    completed_at: str
+    duration_seconds: float
+    exit_code: int

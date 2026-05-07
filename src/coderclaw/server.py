@@ -9,10 +9,8 @@ from coderclaw.agent_home import ensure_agent_home_layout
 from coderclaw.channels.slack import SlackAdapter
 from coderclaw.config import AppConfig
 from coderclaw.logging_utils import configure_logging
-from coderclaw.memory import MemoryStore
 from coderclaw.orchestrator import SessionOrchestrator
-from coderclaw.policy import SelfImprovementPolicy
-from coderclaw.queue import InMemoryMessageQueue
+from coderclaw.queue import DurableMessageQueue
 from coderclaw.runtimes.codex import CodexRuntime
 from coderclaw.watchdog import Watchdog
 
@@ -30,7 +28,6 @@ class CoderClawApp:
                 config.repo_root / "src",
                 config.repo_root / "README.md",
                 config.repo_root / "AGENTS.md",
-                config.coder_home_root / "AGENTS.md",
                 config.memory_file,
                 config.daily_memory_dir,
                 config.coder_home_root / "skills",
@@ -42,22 +39,15 @@ class CoderClawApp:
             runtime=CodexRuntime(
                 codex_bin=config.codex_bin,
                 repo_root=config.repo_root,
-                codex_home=config.codex_home,
                 timeout_seconds=config.codex_timeout_seconds,
             ),
-            memory_store=MemoryStore(config.memory_file, config.daily_memory_dir),
-            policy=SelfImprovementPolicy(),
             slack=self._slack,
             watchdog=self._watchdog,
         )
-        self._queue = InMemoryMessageQueue()
+        self._queue = DurableMessageQueue(config.queue_state_file)
 
     def start(self) -> None:
-        ensure_agent_home_layout(
-            repo_root=self._config.repo_root,
-            coder_home_root=self._config.coder_home_root,
-            codex_home=self._config.codex_home,
-        )
+        ensure_agent_home_layout(coder_home_root=self._config.coder_home_root)
         self._queue.start(self._orchestrator.handle_message)
         self._slack.start_socket_mode(self._queue.put)
         self._watchdog.record_heartbeat("server")
@@ -80,9 +70,9 @@ class CoderClawApp:
             "slack_connected": self._slack.is_socket_mode_connected(),
             "runtime": "codex",
             "coder_home_root": str(self._config.coder_home_root),
-            "codex_home": str(self._config.codex_home),
             "memory_file": str(self._config.memory_file),
             "daily_memory_dir": str(self._config.daily_memory_dir),
+            "queue_state_file": str(self._config.queue_state_file),
         }
 
 

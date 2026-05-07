@@ -18,12 +18,13 @@ Most coding agents assume the user is operating the terminal directly. CoderClaw
 The repository now includes a minimal Python service with:
 
 - a Slack Socket Mode client
-- an in-memory message queue
+- a durable local message queue with active session recovery
 - a session orchestrator
 - a Codex runtime adapter
+- structured runtime execution metadata on successful runtime calls
 - a watchdog thread for stale-component and source-change detection
 - a local health endpoint
-- Markdown steering and memory files loaded from `.coder_home`, with daily memory kept outside it
+- repo-root `AGENTS.md` plus Markdown memory files, with only skills kept under `.coder_home`
 
 The implementation stays intentionally small, but Slack integration now uses the official Slack SDK because Socket Mode is the cleanest way to avoid exposing a public webhook URL from the user's laptop.
 
@@ -33,7 +34,7 @@ The implementation stays intentionally small, but Slack integration now uses the
 flowchart LR
     U[Slack User] --> S[Slack App]
     S <--> A[Slack Socket Mode Client]
-    A --> Q[In-Memory Queue]
+    A --> Q[Durable Local Queue]
     Q --> O[Session Orchestrator]
     O --> R[Codex Runtime Adapter]
     R --> X[Codex CLI]
@@ -49,11 +50,11 @@ flowchart LR
 ```text
 .
 .coder_home/
-  AGENTS.md
-  MEMORY.md
   skills/
     <skill>/
       SKILL.md
+AGENTS.md
+MEMORY.md
 memory/
   daily/
 src/
@@ -91,9 +92,9 @@ Useful optional variables:
 - `CODERCLAW_PORT`
 - `CODERCLAW_REPO_ROOT`
 - `CODERCLAW_HOME_ROOT`
-- `CODERCLAW_CODEX_HOME`
 - `CODERCLAW_MEMORY_FILE`
 - `CODERCLAW_DAILY_MEMORY_DIR`
+- `CODERCLAW_QUEUE_STATE_FILE`
 - `CODERCLAW_CODEX_BIN`
 - `CODERCLAW_CODEX_TIMEOUT_SECONDS`
 
@@ -114,47 +115,49 @@ CoderClaw uses a shared project-local `.coder_home` directory for coding agent p
 
 Current convention:
 
-- `.coder_home/` is the shared agent-home root
-- `.coder_home/AGENTS.md` is canonical steering
-- `.coder_home/MEMORY.md` is canonical long-term memory
+- `.coder_home/` is reserved for skills
 - `.coder_home/skills/` stores portable Markdown-first skills
-- `.codex` can be a convenience symlink to `.coder_home` when needed
+- `.agents/skills` symlinks to `.coder_home/skills` for Codex-compatible repo-level discovery
+- repo-root `AGENTS.md` is the static prompt entrypoint
+- repo-root `MEMORY.md` is canonical long-term memory
 
-When CoderClaw launches Codex, it sets:
+CoderClaw does not inject a custom `CODEX_HOME` when launching Codex.
 
-```text
-CODEX_HOME=.coder_home
-```
-
-This keeps project-specific steering close to the repository while preserving a path for future agent-specific conventional names through symlinks.
+This keeps project-specific skills in the agent home while preserving repo-root prompt and memory files that are visible to agent products using `AGENTS.md` conventions.
 
 Important operational note:
 
-- treat `.coder_home` as local runtime state
+- treat `.coder_home` as skills storage only
 - do not treat `.coder_home` as the canonical source for steering or memory
 - do not commit auth tokens, caches, or generated logs from agent CLIs
 
 ## 6.2 Markdown Usage Model
 
-CoderClaw now uses an OpenClaw-inspired Markdown layout with one deliberate simplification: steering stays merged into a single `AGENTS.md`.
+CoderClaw keeps static prompt guidance directly in `AGENTS.md`, while dynamic memory and skills remain separate:
 
 The repository conventions are:
 
-- `.coder_home/AGENTS.md`
-  - canonical merged steering file
-  - absorbs the role we would otherwise split across extra files such as `SOUL.md` and `TOOLS.md`
-- `.coder_home/MEMORY.md`
+- `AGENTS.md`
+  - direct static prompt file consumed by coding agents that honor `AGENTS.md`
+  - keeps references to dynamic context rather than embedding that context directly
+- `MEMORY.md`
   - curated long-term memory
   - use for durable facts, stable preferences, and lasting design decisions
 - `memory/daily/YYYY-MM-DD.md`
   - daily working memory
-  - use for short-horizon notes, current context, and observations that may later be promoted to `.coder_home/MEMORY.md`
+  - use for short-horizon notes, current context, and observations that may later be promoted to `MEMORY.md`
 - `.coder_home/skills/<skill>/SKILL.md`
   - canonical portable skill format
-  - keeps skills Markdown-first and adaptable across different coding agent products
+  - keeps skills Markdown-first and adaptable across different coding agent products while following the chosen agent's home/skills convention
+  - for any new coding agent choice, first consult that agent's official guide for repo-, project-, or workspace-level skills setup
+  - for Codex, the official skills guide is `https://developers.openai.com/codex/skills`
+  - in this repo, Codex-compatible discovery is provided via `.agents/skills -> .coder_home/skills`
+- `conclude the session` means updating the relevant Markdown files to reflect current project status, then creating a git commit
 
-CoderClaw adopts the memory self-updating behavior at the agent-instruction level:
+CoderClaw keeps dynamic context discoverable rather than eagerly injected:
 
+- `AGENTS.md` references `MEMORY.md`, `memory/daily/YYYY-MM-DD.md`, and `.coder_home/skills/...`
+- the coding agent chooses whether to open those files for the current task
 - if a task implies `remember this`, the agent should update the appropriate Markdown memory file as part of the task
 - memory updates happen through normal file edits
 - CoderClaw does not currently implement OpenClaw-style programmatic pre-compaction memory flushing
@@ -211,6 +214,8 @@ Current Slack behavior:
 - accepts `app_mention` events in channels
 - accepts direct messages through `message.im`
 - normalizes the message text into a queue message
+- persists queued messages and active session metadata to local disk
+- restores queued and interrupted active messages after process restart
 - reacts with `:eyes:` while a request is running
 - replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
 - runs the message through the Codex runtime adapter
@@ -224,8 +229,6 @@ The first runtime adapter shells out to:
 codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
 ```
 
-CoderClaw runs Codex with a project-local `CODEX_HOME` rooted at `.coder_home`.
-
 This is an implementation detail behind the runtime boundary, not a permanent system constraint.
 
 ## 10. Self-Improvement Principles
@@ -238,8 +241,8 @@ This is an implementation detail behind the runtime boundary, not a permanent sy
 
 ## 11. Near-Term Next Steps
 
-1. Replace the in-memory queue with a durable queue.
-2. Add session persistence and structured audit logging.
+1. Add structured audit logging.
+2. Persist runtime failure metadata for failed adapter calls.
 3. Add a second channel or a second runtime to validate the abstractions.
 4. Expand Slack handling beyond `app_mention`.
 5. Decide how self-improvement changes are reviewed and applied.
@@ -247,3 +250,11 @@ This is an implementation detail behind the runtime boundary, not a permanent sy
 ## 12. Current Status
 
 This is now a runnable bootstrap rather than documentation only. It is still an early skeleton, but the core boundaries for Slack intake, orchestration, Codex execution, memory, and watchdog supervision are in place.
+
+Current repository conventions are:
+
+- static prompt guidance lives directly in repo-root `AGENTS.md`
+- durable project memory lives in repo-root `MEMORY.md`
+- `.coder_home/skills/` is the shared skills store
+- `.agents/skills -> .coder_home/skills` provides Codex-compatible repo-level skill discovery
+- CoderClaw does not set a custom `CODEX_HOME`

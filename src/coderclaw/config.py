@@ -30,9 +30,9 @@ class AppConfig:
     port: int
     repo_root: Path
     coder_home_root: Path
-    codex_home: Path
     memory_file: Path
     daily_memory_dir: Path
+    queue_state_file: Path
     codex_bin: str
     codex_timeout_seconds: int
     watchdog_interval_seconds: int
@@ -45,17 +45,17 @@ class AppConfig:
         repo_root = Path(os.getenv("CODERCLAW_REPO_ROOT", ".")).resolve()
         load_dotenv(repo_root / ".env")
         coder_home_root = Path(os.getenv("CODERCLAW_HOME_ROOT", ".coder_home"))
-        codex_home = Path(os.getenv("CODERCLAW_CODEX_HOME", str(coder_home_root)))
-        memory_file = Path(os.getenv("CODERCLAW_MEMORY_FILE", str(coder_home_root / "MEMORY.md")))
+        memory_file = Path(os.getenv("CODERCLAW_MEMORY_FILE", "MEMORY.md"))
         daily_memory_dir = Path(os.getenv("CODERCLAW_DAILY_MEMORY_DIR", "memory/daily"))
+        queue_state_file = Path(os.getenv("CODERCLAW_QUEUE_STATE_FILE", ".coderclaw/state/queue.json"))
         return cls(
             host=os.getenv("CODERCLAW_HOST", "127.0.0.1"),
             port=_env_int("CODERCLAW_PORT", 8787),
             repo_root=repo_root,
             coder_home_root=(repo_root / coder_home_root).resolve(),
-            codex_home=(repo_root / codex_home).resolve(),
             memory_file=(repo_root / memory_file).resolve(),
             daily_memory_dir=(repo_root / daily_memory_dir).resolve(),
+            queue_state_file=(repo_root / queue_state_file).resolve(),
             codex_bin=os.getenv("CODERCLAW_CODEX_BIN", "codex"),
             codex_timeout_seconds=_env_int("CODERCLAW_CODEX_TIMEOUT_SECONDS", 1800),
             watchdog_interval_seconds=_env_int("CODERCLAW_WATCHDOG_INTERVAL_SECONDS", 5),

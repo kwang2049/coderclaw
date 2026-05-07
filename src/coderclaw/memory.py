@@ -29,7 +29,7 @@ class MemoryStore:
 
     def describe_update_policy(self) -> str:
         return (
-            "Persist durable facts, stable preferences, and long-term design decisions to .coder_home/MEMORY.md. "
+            "Persist durable facts, stable preferences, and long-term design decisions to MEMORY.md. "
             "Persist short-horizon notes and daily context to memory/daily/YYYY-MM-DD.md. "
             "If the user says to remember something, update the appropriate file as part of the task. "
             "Do not rely on hidden memory; Markdown files are the source of truth."
