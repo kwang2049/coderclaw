@@ -162,31 +162,54 @@ CoderClaw keeps dynamic context discoverable rather than eagerly injected:
 
 ## 7. Set Up The Slack Bot
 
-1. Create a Slack app at `api.slack.com/apps`.
-2. Choose the workspace where you want to test CoderClaw.
-3. Under `OAuth & Permissions`, add these bot token scopes:
-   - `app_mentions:read`
-   - `chat:write`
-   - `reactions:write`
-4. Install the app to the workspace and copy the `Bot User OAuth Token`.
-5. Export the value before starting the server:
+Use the repo-root [manifest.json](/Users/kwang/Documents/workspaces/CoderClaw/manifest.json) to create the Slack app instead of configuring the app manually in the UI.
+
+1. Open `api.slack.com/apps`.
+2. Choose `Create New App`.
+3. Choose `From an app manifest`.
+4. Select the target workspace.
+5. Paste the contents of `manifest.json`.
+6. Review and create the app.
+7. Install the app to the workspace and copy the `Bot User OAuth Token`.
+8. Export the value before starting the server:
 
 ```bash
 export SLACK_BOT_TOKEN=xoxb-...
 ```
 
-6. Under `Basic Information`, create an app-level token with the scope `connections:write`.
-7. Copy the app-level token and export it as `SLACK_APP_TOKEN`.
-8. Under `Socket Mode`, enable Socket Mode for the app.
-9. Under `App Home`, turn on the `Messages Tab` if you want direct messages to work.
-10. Under `Event Subscriptions`, enable events.
-11. Subscribe to these bot events:
-   - `app_mention`
-   - `message.im`
-12. Click `Save changes`.
-13. Reinstall the app if Slack asks for updated permissions.
-14. Add the app to a channel in Slack.
-15. Mention the bot in that channel or send it a direct message.
+9. Under `Basic Information`, create an app-level token with the scope `connections:write`.
+10. Copy the app-level token and export it as `SLACK_APP_TOKEN`.
+11. Confirm the manifest-applied settings in Slack:
+   - bot scopes: `app_mentions:read`, `chat:write`, `reactions:write`, `im:history`
+   - bot events: `app_mention`, `message.im`
+   - Socket Mode: enabled
+12. Reinstall the app if Slack asks for updated permissions.
+13. Add the app to a channel in Slack.
+14. Mention the bot in that channel or send it a direct message.
+
+The current manifest also includes a concrete `event_subscriptions.request_url`, but CoderClaw uses Socket Mode for normal operation. Treat that URL as environment-specific and update or remove it as appropriate for your workspace.
+
+You can also automate manifest-based app management from the shell with:
+
+```bash
+export SLACK_CONFIG_TOKEN=xoxe.xoxp-...
+scripts/slack-app-validate.sh
+scripts/slack-app-create.sh
+```
+
+To update an existing app from the same manifest:
+
+```bash
+export SLACK_CONFIG_TOKEN=xoxe.xoxp-...
+export SLACK_APP_ID=A0123456789
+scripts/slack-app-update.sh
+```
+
+These scripts manage the app manifest, but they do not eliminate all manual Slack steps:
+
+- you still need to obtain `SLACK_CONFIG_TOKEN` from Slack
+- you still need the app-level `SLACK_APP_TOKEN` (`xapp-...`) from Slack
+- you may still need to complete workspace install/consent using the returned OAuth authorize URL
 
 Example:
 
@@ -209,6 +232,7 @@ Current HTTP routes:
 Current Slack behavior:
 
 - opens an outbound Socket Mode connection to Slack using `SLACK_APP_TOKEN`
+- recommends Slack app creation from `manifest.json` so scopes and events stay aligned with the repo
 - accepts `app_mention` events in channels
 - accepts direct messages through `message.im`
 - normalizes the message text into a queue message
@@ -266,3 +290,4 @@ Current repository conventions are:
 - `scripts/start.sh` runs CoderClaw in the background via `nohup` and writes timestamped logs under `.coderclaw/logs/`
 - handled sessions are archived under `.coderclaw/sessions/`
 - automatic restart on watched file changes uses a restart lock at `.coderclaw/state/restart.lock` and waits for in-flight sessions to finish
+- Slack app setup is manifest-driven from repo-root `manifest.json`
