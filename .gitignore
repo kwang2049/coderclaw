@@ -15,3 +15,4 @@
 .coderclaw/
 memory/daily/*.md
 !memory/daily/README.md
+docs/coderclaw-vs-openclaw-vs-nanoclaw-process-models.md
