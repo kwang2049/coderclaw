@@ -5,6 +5,7 @@ import logging
 from coderclaw.channels.slack import SlackAdapter
 from coderclaw.models import ChannelName, InboundMessage
 from coderclaw.runtimes.base import AgentRuntime
+from coderclaw.session_store import SessionStore
 from coderclaw.watchdog import Watchdog
 
 
@@ -16,10 +17,12 @@ class SessionOrchestrator:
     def __init__(
         self,
         runtime: AgentRuntime,
+        session_store: SessionStore,
         slack: SlackAdapter,
         watchdog: Watchdog,
     ) -> None:
         self._runtime = runtime
+        self._session_store = session_store
         self._slack = slack
         self._watchdog = watchdog
         self._logger = logging.getLogger(__name__)
@@ -33,10 +36,12 @@ class SessionOrchestrator:
             result = self._runtime.execute(prompt)
         except Exception as exc:  # pragma: no cover - defensive entry point
             self._logger.exception("runtime execution failed")
+            self._session_store.record_failure(message, prompt, str(exc))
             self._replace_slack_reaction(message, remove_emoji=self.IN_PROGRESS_EMOJI, add_emoji=self.FAILURE_EMOJI)
             self._reply(message, f"CoderClaw failed to execute the request: {exc}")
             return
 
+        self._session_store.record_success(message, prompt, result)
         self._replace_slack_reaction(message, remove_emoji=self.IN_PROGRESS_EMOJI, add_emoji=self.SUCCESS_EMOJI)
         self._reply(message, result.output_text)
 

@@ -3,14 +3,22 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 
 class Watchdog:
-    def __init__(self, watch_paths: list[Path], interval_seconds: int, stale_seconds: int) -> None:
+    def __init__(
+        self,
+        watch_paths: list[Path],
+        interval_seconds: int,
+        stale_seconds: int,
+        on_change: Callable[[], None] | None = None,
+    ) -> None:
         self._watch_paths = watch_paths
         self._interval_seconds = interval_seconds
         self._stale_seconds = stale_seconds
+        self._on_change = on_change
         self._heartbeats: dict[str, float] = {}
         self._snapshot = self._take_snapshot()
         self._stop_event = threading.Event()
@@ -50,6 +58,8 @@ class Watchdog:
         if current != self._snapshot:
             self._logger.info("watchdog detected source or doc changes")
             self._snapshot = current
+            if self._on_change:
+                self._on_change()
 
     def _take_snapshot(self) -> dict[str, int]:
         snapshot: dict[str, int] = {}
@@ -61,4 +71,3 @@ class Watchdog:
                     if file_path.is_file():
                         snapshot[str(file_path)] = int(file_path.stat().st_mtime_ns)
         return snapshot
-

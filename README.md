@@ -92,6 +92,8 @@ Useful optional variables:
 - `CODERCLAW_MEMORY_FILE`
 - `CODERCLAW_DAILY_MEMORY_DIR`
 - `CODERCLAW_QUEUE_STATE_FILE`
+- `CODERCLAW_SESSION_ARCHIVE_DIR`
+- `CODERCLAW_RESTART_LOCK_FILE`
 - `CODERCLAW_CODEX_BIN`
 - `CODERCLAW_CODEX_TIMEOUT_SECONDS`
 
@@ -211,7 +213,9 @@ Current Slack behavior:
 - accepts direct messages through `message.im`
 - normalizes the message text into a queue message
 - persists queued messages and active session metadata to local disk
+- appends each handled session exchange to `.coderclaw/sessions/`
 - restores queued and interrupted active messages after process restart
+- automatically restarts on watched source/doc changes after active and queued sessions have completed
 - reacts with `:eyes:` while a request is running
 - replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
 - runs the message through the Codex runtime adapter
@@ -256,3 +260,5 @@ Current repository conventions are:
 - CoderClaw does not set a custom `CODEX_HOME`
 - `scripts/install.sh` bootstraps the local environment with `python >= 3.11`
 - `scripts/start.sh` runs CoderClaw in the background via `nohup` and writes timestamped logs under `.coderclaw/logs/`
+- handled sessions are archived under `.coderclaw/sessions/`
+- automatic restart on watched file changes uses a restart lock at `.coderclaw/state/restart.lock` and waits for in-flight sessions to finish

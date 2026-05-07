@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import sys
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -11,7 +13,9 @@ from coderclaw.config import AppConfig
 from coderclaw.logging_utils import configure_logging
 from coderclaw.orchestrator import SessionOrchestrator
 from coderclaw.queue import DurableMessageQueue
+from coderclaw.restart import RestartController
 from coderclaw.runtimes.codex import CodexRuntime
+from coderclaw.session_store import SessionStore
 from coderclaw.watchdog import Watchdog
 
 
@@ -23,6 +27,8 @@ class CoderClawApp:
             bot_token=config.slack_bot_token,
             app_token=config.slack_app_token,
         )
+        self._restart = RestartController(config.restart_lock_file)
+        self._drain_logged = False
         self._watchdog = Watchdog(
             watch_paths=[
                 config.repo_root / "src",
@@ -34,6 +40,7 @@ class CoderClawApp:
             ],
             interval_seconds=config.watchdog_interval_seconds,
             stale_seconds=config.watchdog_stale_seconds,
+            on_change=self.request_restart,
         )
         self._orchestrator = SessionOrchestrator(
             runtime=CodexRuntime(
@@ -41,6 +48,7 @@ class CoderClawApp:
                 repo_root=config.repo_root,
                 timeout_seconds=config.codex_timeout_seconds,
             ),
+            session_store=SessionStore(config.session_archive_dir),
             slack=self._slack,
             watchdog=self._watchdog,
         )
@@ -62,6 +70,42 @@ class CoderClawApp:
         self._queue.stop()
         self._watchdog.stop()
 
+    def request_restart(self) -> None:
+        if self._restart.is_requested():
+            return
+        self._logger.info("restart requested after source or doc change")
+        self._restart.request_restart()
+
+    def maybe_restart(self, server: ThreadingHTTPServer) -> bool:
+        if not self._restart.is_requested():
+            return False
+
+        self._restart.prepare_for_restart(self._slack.stop_socket_mode)
+        pending = self._queue.pending_count()
+        active = self._queue.active_count()
+        if pending or active:
+            if not self._drain_logged:
+                self._logger.info(
+                    "restart requested; waiting for sessions to complete pending=%s active=%s",
+                    pending,
+                    active,
+                )
+                self._drain_logged = True
+            return False
+
+        self._logger.info("restart requested; all sessions completed, restarting process")
+        self._restart.perform_restart(
+            stop_runtime=lambda: self._stop_for_restart(server),
+            reexec=_reexec_current_process,
+        )
+        return True
+
+    def _stop_for_restart(self, server: ThreadingHTTPServer) -> None:
+        server.server_close()
+        self._slack.stop_socket_mode()
+        self._queue.stop()
+        self._watchdog.stop()
+
     def health(self) -> dict[str, object]:
         return {
             "status": "ok",
@@ -73,6 +117,8 @@ class CoderClawApp:
             "memory_file": str(self._config.memory_file),
             "daily_memory_dir": str(self._config.daily_memory_dir),
             "queue_state_file": str(self._config.queue_state_file),
+            "session_archive_dir": str(self._config.session_archive_dir),
+            "restart_requested": self._restart.is_requested(),
         }
 
 
@@ -109,15 +155,23 @@ def main() -> None:
     app.start()
 
     server = ThreadingHTTPServer((config.host, config.port), build_handler(app))
+    server.timeout = 1
     logging.getLogger(__name__).info(
         "CoderClaw listening on http://%s:%s with Slack Socket Mode",
         config.host,
         config.port,
     )
     try:
-        server.serve_forever()
+        while True:
+            server.handle_request()
+            if app.maybe_restart(server):
+                return
     except KeyboardInterrupt:
         logging.getLogger(__name__).info("shutting down")
     finally:
         server.server_close()
         app.stop()
+
+
+def _reexec_current_process() -> None:
+    os.execv(sys.executable, [sys.executable, "-m", "coderclaw"])

@@ -18,4 +18,6 @@ Current durable memory:
 - Slack queue and active session persistence is local-first runtime state stored by default at `.coderclaw/state/queue.json`.
 - Local bootstrap uses `scripts/install.sh`, requiring `python >= 3.11`.
 - Local startup uses `scripts/start.sh`, which can restart an existing listener and writes timestamped logs under `.coderclaw/logs/`.
+- Handled session exchanges are archived under `.coderclaw/sessions/` as JSONL files keyed by session.
+- Automatic restart on watched file changes drains active/queued sessions before re-exec and uses `.coderclaw/state/restart.lock`.
 - Runtime adapters should return structured execution metadata through `AgentResult.metadata` for cross-runtime observability.
