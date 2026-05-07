@@ -7,6 +7,26 @@ from coderclaw.channels.slack import SlackAdapter
 from coderclaw.models import ChannelName
 
 
+class FakeWebClient:
+    def conversations_history(self, channel: str, limit: int) -> dict[str, object]:
+        return {
+            "messages": [
+                {"ts": "1710000000.000000", "user": "U111", "text": "root one"},
+                {"ts": "1710000000.000080", "user": "U222", "text": "root two"},
+                {"ts": "1710000000.000100", "user": "U123", "text": "<@U999> inspect the repo", "thread_ts": "1710000000.000000"},
+            ]
+        }
+
+    def conversations_replies(self, channel: str, ts: str, limit: int) -> dict[str, object]:
+        return {
+            "messages": [
+                {"ts": "1710000000.000000", "user": "U111", "text": "root one", "thread_ts": "1710000000.000000"},
+                {"ts": "1710000000.000050", "user": "U333", "text": "branch reply", "thread_ts": "1710000000.000000"},
+                {"ts": "1710000000.000100", "user": "U123", "text": "<@U999> inspect the repo", "thread_ts": "1710000000.000000"},
+            ]
+        }
+
+
 class FakeSocketClient:
     def __init__(self) -> None:
         self.responses: list[object] = []
@@ -18,6 +38,7 @@ class FakeSocketClient:
 class SlackAdapterTests(unittest.TestCase):
     def test_extracts_app_mention_with_event_id_and_thread_session(self) -> None:
         adapter = SlackAdapter(bot_token=None, app_token=None)
+        adapter._web_client = FakeWebClient()
 
         message = adapter.extract_message(
             {
@@ -40,6 +61,10 @@ class SlackAdapterTests(unittest.TestCase):
         self.assertEqual(message.text, "inspect the repo")
         self.assertEqual(message.session_key, "slack:C123:1710000000.000000")
         self.assertEqual(message.reply_target.thread_ts, "1710000000.000000")
+        self.assertEqual(len(message.context_messages), 3)
+        self.assertEqual(message.context_messages[0].text, "root one")
+        self.assertEqual(message.context_messages[1].text, "branch reply")
+        self.assertEqual(message.context_messages[-1].text, "inspect the repo")
 
     def test_extracts_direct_message_without_mention(self) -> None:
         adapter = SlackAdapter(bot_token=None, app_token=None)

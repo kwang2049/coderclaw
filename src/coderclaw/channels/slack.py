@@ -12,7 +12,7 @@ from slack_sdk.socket_mode.request import SocketModeRequest
 from slack_sdk.socket_mode.response import SocketModeResponse
 from slack_sdk.web import WebClient
 
-from coderclaw.models import ChannelName, InboundMessage, ReplyTarget
+from coderclaw.models import ChannelName, ContextMessage, InboundMessage, ReplyTarget
 
 
 MENTION_RE = re.compile(r"<@[^>]+>")
@@ -89,6 +89,15 @@ class SlackAdapter:
             return None
 
         message_id = f"slack:{event_id}" if event_id else f"slack:{channel_id}:{event_ts}"
+        context_messages = tuple(
+            self.fetch_context_messages(
+                channel_id=channel_id,
+                event_ts=event_ts,
+                thread_ts=thread_ts,
+                channel_type=channel_type,
+                limit=10,
+            )
+        )
         return InboundMessage(
             message_id=message_id,
             channel=ChannelName.SLACK,
@@ -102,6 +111,7 @@ class SlackAdapter:
                 thread_ts=thread_ts,
                 user_id=user_id,
             ),
+            context_messages=context_messages,
         )
 
     def add_reaction(self, channel_id: str, timestamp: str, emoji_name: str) -> None:
@@ -123,6 +133,52 @@ class SlackAdapter:
 
         self._require_web_client().chat_postMessage(**body)
         self._logger.info("posted Slack reply channel=%s thread_ts=%s", channel_id, thread_ts)
+
+    def fetch_context_messages(
+        self,
+        channel_id: str,
+        event_ts: str,
+        thread_ts: str,
+        channel_type: str,
+        limit: int,
+    ) -> list[ContextMessage]:
+        if not self._web_client:
+            return []
+
+        if channel_type == "im":
+            try:
+                response = self._require_web_client().conversations_history(channel=channel_id, limit=limit)
+            except SlackApiError:
+                self._logger.exception("failed to fetch Slack DM context channel=%s", channel_id)
+                return []
+            messages = response.get("messages", [])
+            if not isinstance(messages, list):
+                return []
+            context = [_normalize_context_message(raw) for raw in messages]
+            return _filter_and_trim_context(context, limit)
+
+        is_thread_reply = thread_ts and thread_ts != event_ts
+        if is_thread_reply:
+            try:
+                replies = self._require_web_client().conversations_replies(channel=channel_id, ts=thread_ts, limit=limit)
+                reply_messages = replies.get("messages", [])
+                if isinstance(reply_messages, list):
+                    branch = [_normalize_context_message(raw) for raw in reply_messages]
+                    return _filter_and_trim_context(branch, limit, event_ts=event_ts)
+            except SlackApiError:
+                self._logger.exception("failed to fetch Slack thread context channel=%s thread_ts=%s", channel_id, thread_ts)
+            return []
+
+        try:
+            history = self._require_web_client().conversations_history(channel=channel_id, limit=limit)
+            root_messages = history.get("messages", [])
+            if not isinstance(root_messages, list):
+                return []
+            roots = [_normalize_context_message(raw) for raw in root_messages]
+            return _filter_and_trim_context(roots, limit, event_ts=event_ts)
+        except SlackApiError:
+            self._logger.exception("failed to fetch Slack channel context channel=%s", channel_id)
+            return []
 
     def _handle_socket_request(self, client: SocketModeClient, request: SocketModeRequest) -> None:
         if request.envelope_id:
@@ -171,3 +227,41 @@ class SlackAdapter:
             self._seen_message_order.append(message_id)
             self._seen_message_ids.add(message_id)
             return True
+
+
+def _normalize_context_message(raw: object) -> ContextMessage | None:
+    if not isinstance(raw, dict):
+        return None
+    text = str(raw.get("text", "")).strip()
+    message_ts = str(raw.get("ts", "")).strip()
+    if not text or not message_ts:
+        return None
+    if raw.get("subtype") in {"message_deleted", "channel_join", "channel_leave"}:
+        return None
+    thread_ts_raw = raw.get("thread_ts")
+    thread_ts = str(thread_ts_raw).strip() if thread_ts_raw else None
+    user_id = str(raw.get("user", "")).strip() or None
+    return ContextMessage(
+        channel=ChannelName.SLACK,
+        message_ts=message_ts,
+        thread_ts=thread_ts,
+        user_id=user_id,
+        text=MENTION_RE.sub("", text).strip(),
+    )
+
+
+def _filter_and_trim_context(
+    messages: list[ContextMessage | None],
+    limit: int,
+    event_ts: str | None = None,
+) -> list[ContextMessage]:
+    deduped: dict[str, ContextMessage] = {}
+    for message in messages:
+        if message is None:
+            continue
+        deduped[message.message_ts] = message
+
+    ordered = sorted(deduped.values(), key=lambda item: float(item.message_ts))
+    if event_ts:
+        ordered = [message for message in ordered if message.message_ts <= event_ts]
+    return ordered[-limit:]

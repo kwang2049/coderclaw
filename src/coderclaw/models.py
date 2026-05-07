@@ -18,6 +18,15 @@ class ReplyTarget:
 
 
 @dataclass(frozen=True)
+class ContextMessage:
+    channel: ChannelName
+    message_ts: str
+    thread_ts: str | None
+    user_id: str | None
+    text: str
+
+
+@dataclass(frozen=True)
 class InboundMessage:
     message_id: str
     channel: ChannelName
@@ -25,6 +34,7 @@ class InboundMessage:
     user_id: str | None
     session_key: str
     reply_target: ReplyTarget
+    context_messages: tuple[ContextMessage, ...] = ()
 
 
 @dataclass(frozen=True)

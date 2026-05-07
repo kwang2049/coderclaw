@@ -216,6 +216,9 @@ Current Slack behavior:
 - appends each handled session exchange to `.coderclaw/sessions/`
 - restores queued and interrupted active messages after process restart
 - automatically restarts on watched source/doc changes after active and queued sessions have completed
+- builds Slack prompt context as up to 10 messages from the relevant tree slice
+- for thread replies, includes only the current branch path up to the incoming message
+- for new top-level channel messages, includes only recent top-level channel messages
 - reacts with `:eyes:` while a request is running
 - replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
 - runs the message through the Codex runtime adapter
@@ -258,6 +261,7 @@ Current repository conventions are:
 - `.coder_home/skills/` is the shared skills store
 - `.agents/skills -> .coder_home/skills` provides Codex-compatible repo-level skill discovery
 - CoderClaw does not set a custom `CODEX_HOME`
+- Slack prompt context is tree-aware and branch-local rather than full-channel history
 - `scripts/install.sh` bootstraps the local environment with `python >= 3.11`
 - `scripts/start.sh` runs CoderClaw in the background via `nohup` and writes timestamped logs under `.coderclaw/logs/`
 - handled sessions are archived under `.coderclaw/sessions/`

@@ -50,6 +50,7 @@ class SessionOrchestrator:
             part
             for part in [
                 "You are running inside CoderClaw through a Slack-driven local orchestration layer.",
+                _render_context(message),
                 f"User request from {message.channel.value}:\n{message.text}",
             ]
             if part
@@ -95,3 +96,25 @@ class SessionOrchestrator:
             )
         except Exception:
             self._logger.exception("failed to add Slack reaction emoji=%s", add_emoji)
+
+
+def _render_context(message: InboundMessage) -> str:
+    if not message.context_messages:
+        return ""
+
+    roots: list[str] = []
+    branches: dict[str, list[str]] = {}
+    for item in message.context_messages:
+        label = item.user_id or "unknown"
+        line = f"[{item.message_ts}] {label}: {item.text}"
+        if item.thread_ts and item.thread_ts != item.message_ts:
+            branches.setdefault(item.thread_ts, []).append(line)
+        else:
+            roots.append(line)
+
+    parts: list[str] = []
+    if roots:
+        parts.append("Main thread:\n" + "\n".join(f"- {line}" for line in roots))
+    for thread_ts, lines in branches.items():
+        parts.append(f"Branch {thread_ts}:\n" + "\n".join(f"- {line}" for line in lines))
+    return "Slack context tree (up to 10 messages):\n" + "\n\n".join(parts)
