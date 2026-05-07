@@ -22,5 +22,6 @@ Current durable memory:
 - Automatic restart on watched file changes drains active/queued sessions before re-exec and uses `.coderclaw/state/restart.lock`.
 - Slack prompt context keeps up to 10 messages from the relevant tree slice; thread replies see only their branch path and top-level messages see only recent roots.
 - Slack app setup should be imported from repo-root `manifest.json`; current manifest enables Socket Mode and declares `app_mention` and `message.im` bot events plus `app_mentions:read`, `chat:write`, `reactions:write`, and `im:history` bot scopes.
+- Slack direct messages require the App Home messages tab to remain enabled in `manifest.json`.
 - Slack app manifest management is partially automated by `scripts/slack-app-validate.sh`, `scripts/slack-app-create.sh`, and `scripts/slack-app-update.sh`, using `SLACK_CONFIG_TOKEN`.
 - Runtime adapters should return structured execution metadata through `AgentResult.metadata` for cross-runtime observability.

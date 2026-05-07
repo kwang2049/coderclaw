@@ -182,6 +182,7 @@ export SLACK_BOT_TOKEN=xoxb-...
 11. Confirm the manifest-applied settings in Slack:
    - bot scopes: `app_mentions:read`, `chat:write`, `reactions:write`, `im:history`
    - bot events: `app_mention`, `message.im`
+   - App Home messages tab: enabled
    - Socket Mode: enabled
 12. Reinstall the app if Slack asks for updated permissions.
 13. Add the app to a channel in Slack.
