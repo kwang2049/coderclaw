@@ -75,10 +75,7 @@ src/
 CoderClaw should be run with Python 3.11 inside a local virtual environment.
 
 ```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-cp .env.example .env
+scripts/install.sh
 ```
 
 Set the required environment variables in your shell or `.env` loader of choice:
@@ -101,13 +98,12 @@ Useful optional variables:
 ## 6. Run The Service
 
 ```bash
-source .venv/bin/activate
-export SLACK_BOT_TOKEN=...
-export SLACK_APP_TOKEN=...
-coderclaw
+scripts/start.sh
 ```
 
 By default the local health server listens on `http://127.0.0.1:8787`.
+
+`scripts/start.sh` launches CoderClaw in the background via `nohup` and writes logs to timestamped files under `.coderclaw/logs/`.
 
 ## 6.1 Shared Agent Home
 
@@ -258,3 +254,5 @@ Current repository conventions are:
 - `.coder_home/skills/` is the shared skills store
 - `.agents/skills -> .coder_home/skills` provides Codex-compatible repo-level skill discovery
 - CoderClaw does not set a custom `CODEX_HOME`
+- `scripts/install.sh` bootstraps the local environment with `python >= 3.11`
+- `scripts/start.sh` runs CoderClaw in the background via `nohup` and writes timestamped logs under `.coderclaw/logs/`

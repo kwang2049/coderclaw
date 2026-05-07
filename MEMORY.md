@@ -16,4 +16,6 @@ Current durable memory:
 - `.coder_home/` is reserved for skills rather than canonical prompt, memory, or runtime-state files.
 - Static prompt assembly was removed; static prompt guidance now lives directly in repo-root `AGENTS.md`.
 - Slack queue and active session persistence is local-first runtime state stored by default at `.coderclaw/state/queue.json`.
+- Local bootstrap uses `scripts/install.sh`, requiring `python >= 3.11`.
+- Local startup uses `scripts/start.sh`, which can restart an existing listener and writes timestamped logs under `.coderclaw/logs/`.
 - Runtime adapters should return structured execution metadata through `AgentResult.metadata` for cross-runtime observability.
