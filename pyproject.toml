@@ -12,6 +12,11 @@ dependencies = [
     "slack_sdk>=3.36,<4",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+]
+
 [project.scripts]
 coderclaw = "coderclaw.__main__:main"
 

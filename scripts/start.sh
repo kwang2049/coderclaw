@@ -38,6 +38,7 @@ fi
 
 cd "${ROOT_DIR}"
 mkdir -p "${LOG_DIR}"
+export PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
 nohup "${VENV_DIR}/bin/coderclaw" >> "${LOG_FILE}" 2>&1 &
 NEW_PID="$!"
 echo "CoderClaw started in background on ${HOST}:${PORT} (PID ${NEW_PID})"

@@ -24,7 +24,7 @@ else
   echo "${VENV_DIR} already exists; skipping virtualenv creation"
 fi
 
-"${VENV_DIR}/bin/pip" install -e "${ROOT_DIR}"
+"${VENV_DIR}/bin/pip" install --no-build-isolation -e "${ROOT_DIR}"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   cp "${ENV_EXAMPLE}" "${ENV_FILE}"
