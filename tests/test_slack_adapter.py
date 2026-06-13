@@ -27,6 +27,18 @@ class FakeWebClient:
         }
 
 
+class TopLevelThreadWebClient:
+    def conversations_history(self, channel: str, limit: int) -> dict[str, object]:
+        raise AssertionError("top-level thread context must not read neighboring channel history")
+
+    def conversations_replies(self, channel: str, ts: str, limit: int) -> dict[str, object]:
+        return {
+            "messages": [
+                {"ts": ts, "user": "U123", "text": "<@U999> inspect only this thread"},
+            ]
+        }
+
+
 class FakeSocketClient:
     def __init__(self) -> None:
         self.responses: list[object] = []
@@ -65,6 +77,28 @@ class SlackAdapterTests(unittest.TestCase):
         self.assertEqual(message.context_messages[0].text, "root one")
         self.assertEqual(message.context_messages[1].text, "branch reply")
         self.assertEqual(message.context_messages[-1].text, "inspect the repo")
+
+    def test_top_level_message_context_is_its_own_thread_not_channel_history(self) -> None:
+        adapter = SlackAdapter(bot_token=None, app_token=None)
+        adapter._web_client = TopLevelThreadWebClient()
+
+        message = adapter.extract_message(
+            {
+                "event_id": "EvTop",
+                "event": {
+                    "type": "app_mention",
+                    "channel": "C123",
+                    "ts": "1710000000.000100",
+                    "user": "U123",
+                    "text": "<@U999> inspect only this thread",
+                },
+            }
+        )
+
+        self.assertIsNotNone(message)
+        assert message is not None
+        self.assertEqual(message.session_key, "slack:C123:1710000000.000100")
+        self.assertEqual([item.text for item in message.context_messages], ["inspect only this thread"])
 
     def test_extracts_direct_message_without_mention(self) -> None:
         adapter = SlackAdapter(bot_token=None, app_token=None)

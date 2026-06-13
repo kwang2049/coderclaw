@@ -43,7 +43,7 @@ class CoderClawApp:
             on_change=self.request_restart,
         )
         self._orchestrator = SessionOrchestrator(
-            runtime=CodexRuntime(
+            agent=CodexRuntime(
                 codex_bin=config.codex_bin,
                 repo_root=config.repo_root,
                 timeout_seconds=config.codex_timeout_seconds,
@@ -112,7 +112,8 @@ class CoderClawApp:
             "channel": "slack",
             "slack_transport": "socket_mode",
             "slack_connected": self._slack.is_socket_mode_connected(),
-            "runtime": "codex",
+            "agent_boundary": "acp",
+            "agent_adapter": "legacy-codex-cli",
             "coder_home_root": str(self._config.coder_home_root),
             "memory_file": str(self._config.memory_file),
             "daily_memory_dir": str(self._config.daily_memory_dir),

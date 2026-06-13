@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from coderclaw.acp import AgentClient
 from coderclaw.channels.slack import SlackAdapter
-from coderclaw.models import ChannelName, InboundMessage
-from coderclaw.runtimes.base import AgentRuntime
+from coderclaw.models import AgentSessionMessage, AgentSessionRequest, ChannelName, InboundMessage
 from coderclaw.session_store import SessionStore
 from coderclaw.watchdog import Watchdog
 
@@ -16,12 +16,12 @@ class SessionOrchestrator:
 
     def __init__(
         self,
-        runtime: AgentRuntime,
+        agent: AgentClient,
         session_store: SessionStore,
         slack: SlackAdapter,
         watchdog: Watchdog,
     ) -> None:
-        self._runtime = runtime
+        self._agent = agent
         self._session_store = session_store
         self._slack = slack
         self._watchdog = watchdog
@@ -31,29 +31,47 @@ class SessionOrchestrator:
         self._watchdog.record_heartbeat("orchestrator")
         self._logger.info("handling message id=%s session=%s", message.message_id, message.session_key)
         self._set_slack_reaction(message, self.IN_PROGRESS_EMOJI)
-        prompt = self._build_prompt(message)
+        request = self._build_agent_request(message)
         try:
-            result = self._runtime.execute(prompt)
+            result = self._agent.execute_session(request)
         except Exception as exc:  # pragma: no cover - defensive entry point
             self._logger.exception("runtime execution failed")
-            self._session_store.record_failure(message, prompt, str(exc))
+            self._session_store.record_failure(message, _render_session_for_archive(request), str(exc))
             self._replace_slack_reaction(message, remove_emoji=self.IN_PROGRESS_EMOJI, add_emoji=self.FAILURE_EMOJI)
             self._reply(message, f"CoderClaw failed to execute the request: {exc}")
             return
 
-        self._session_store.record_success(message, prompt, result)
+        self._session_store.record_success(message, _render_session_for_archive(request), result)
         self._replace_slack_reaction(message, remove_emoji=self.IN_PROGRESS_EMOJI, add_emoji=self.SUCCESS_EMOJI)
         self._reply(message, result.output_text)
 
-    def _build_prompt(self, message: InboundMessage) -> str:
-        return "\n\n".join(
-            part
-            for part in [
-                "You are running inside CoderClaw through a Slack-driven local orchestration layer.",
-                _render_context(message),
-                f"User request from {message.channel.value}:\n{message.text}",
-            ]
-            if part
+    def _build_agent_request(self, message: InboundMessage) -> AgentSessionRequest:
+        context_messages = message.context_messages or (
+            AgentSessionMessage(
+                channel=message.channel,
+                message_ts=message.reply_target.message_ts,
+                thread_ts=message.reply_target.thread_ts,
+                user_id=message.user_id,
+                text=message.text,
+            ),
+        )
+        session_messages = tuple(
+            item
+            if isinstance(item, AgentSessionMessage)
+            else AgentSessionMessage(
+                channel=item.channel,
+                message_ts=item.message_ts,
+                thread_ts=item.thread_ts,
+                user_id=item.user_id,
+                text=item.text,
+            )
+            for item in context_messages
+        )
+        return AgentSessionRequest(
+            session_key=message.session_key,
+            channel=message.channel,
+            messages=session_messages,
+            latest_user_text=message.text,
         )
 
     def _reply(self, message: InboundMessage, text: str) -> None:
@@ -98,23 +116,16 @@ class SessionOrchestrator:
             self._logger.exception("failed to add Slack reaction emoji=%s", add_emoji)
 
 
-def _render_context(message: InboundMessage) -> str:
-    if not message.context_messages:
-        return ""
-
-    roots: list[str] = []
-    branches: dict[str, list[str]] = {}
-    for item in message.context_messages:
-        label = item.user_id or "unknown"
-        line = f"[{item.message_ts}] {label}: {item.text}"
-        if item.thread_ts and item.thread_ts != item.message_ts:
-            branches.setdefault(item.thread_ts, []).append(line)
-        else:
-            roots.append(line)
-
-    parts: list[str] = []
-    if roots:
-        parts.append("Main thread:\n" + "\n".join(f"- {line}" for line in roots))
-    for thread_ts, lines in branches.items():
-        parts.append(f"Branch {thread_ts}:\n" + "\n".join(f"- {line}" for line in lines))
-    return "Slack context tree (up to 10 messages):\n" + "\n\n".join(parts)
+def _render_session_for_archive(request: AgentSessionRequest) -> str:
+    rendered_messages = "\n".join(
+        f"- [{message.message_ts}] {message.user_id or 'unknown'}: {message.text}" for message in request.messages
+    )
+    return "\n\n".join(
+        part
+        for part in [
+            f"Agent session: {request.session_key}",
+            f"{request.channel.value} thread context:\n{rendered_messages}" if rendered_messages else "",
+            f"Latest user request:\n{request.latest_user_text}",
+        ]
+        if part
+    )

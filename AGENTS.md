@@ -13,15 +13,15 @@ Repository rules:
 
 ## Project Intent
 
-CoderClaw is a local-first agentic system that wraps an existing coding agent CLI as the execution core while exposing the user experience through external communication channels such as Slack, Discord, and email.
+CoderClaw is a local-first agentic system that connects external communication channels such as Slack, Discord, and email to coding agents through ACP (Agent Client Protocol).
 
-The initial target agent is Codex, invoked through a command such as:
+ACP is the primary boundary between CoderClaw and coding agents. CoderClaw should behave as an ACP client that starts or connects to an agent session, sends user-visible thread context as messages, receives agent output, and relays that output back to the communication app.
 
-```bash
-codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
-```
+Each communication thread maps to a new coding-agent session. The agent's context for that session must be exactly the context visible in the communication thread, plus the static project contract and any dynamic files the agent elects to consult. Do not preserve hidden cross-thread agent context as an implicit input.
 
-The architecture must stay extensible so other agent runtimes can be added later, including Claude Code, Gemini CLI, and Kiro CLI.
+Communication apps should primarily behave as message relays. They collect inbound messages, construct the thread-scoped context, send it to the ACP-backed agent session, and post agent responses back into the same thread. Channel-specific behavior should stay thin and should not become the source of agent state.
+
+The architecture must stay extensible so any coding agent with an ACP-compatible interface can be added without changing the communication-channel model.
 
 The first communication channel for implementation is Slack.
 Slack should connect through Socket Mode so the local-first deployment does not depend on a public webhook tunnel for normal Slack operation.
@@ -53,7 +53,8 @@ Memory maintenance rules:
 ## Engineering Rules
 
 - keep the system local-first
-- preserve runtime-agnostic boundaries between agent adapters and orchestration
+- preserve ACP-centered boundaries between communication channels, session orchestration, and coding agents
+- treat communication threads as the authoritative unit of agent session context
 - prefer updating `AGENTS.md` or Markdown memory before broader code mutation
 - keep changes auditable and reversible where practical
 - use Python 3.11 with a local `.venv` workflow unless the user explicitly directs otherwise

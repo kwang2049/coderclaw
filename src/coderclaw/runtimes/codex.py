@@ -5,7 +5,7 @@ import subprocess
 import time
 from datetime import UTC, datetime
 
-from coderclaw.models import AgentResult, RuntimeExecutionMetadata
+from coderclaw.models import AgentResult, AgentSessionRequest, RuntimeExecutionMetadata
 
 
 class CodexRuntime:
@@ -19,6 +19,9 @@ class CodexRuntime:
         self._repo_root = repo_root
         self._timeout_seconds = timeout_seconds
         self._logger = logging.getLogger(__name__)
+
+    def execute_session(self, request: AgentSessionRequest) -> AgentResult:
+        return self.execute(_render_legacy_prompt(request))
 
     def execute(self, prompt: str) -> AgentResult:
         command = [
@@ -61,3 +64,19 @@ class CodexRuntime:
             raw_output=raw_output,
             metadata=metadata,
         )
+
+
+def _render_legacy_prompt(request: AgentSessionRequest) -> str:
+    rendered_messages = "\n".join(
+        f"- [{message.message_ts}] {message.user_id or 'unknown'}: {message.text}" for message in request.messages
+    )
+    return "\n\n".join(
+        part
+        for part in [
+            "You are running inside CoderClaw through a communication-thread-driven local orchestration layer.",
+            f"Agent session key: {request.session_key}",
+            f"{request.channel.value} thread context:\n{rendered_messages}" if rendered_messages else "",
+            f"Latest user request:\n{request.latest_user_text}",
+        ]
+        if part
+    )

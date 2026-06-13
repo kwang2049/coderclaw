@@ -38,6 +38,23 @@ class InboundMessage:
 
 
 @dataclass(frozen=True)
+class AgentSessionMessage:
+    channel: ChannelName
+    message_ts: str
+    thread_ts: str | None
+    user_id: str | None
+    text: str
+
+
+@dataclass(frozen=True)
+class AgentSessionRequest:
+    session_key: str
+    channel: ChannelName
+    messages: tuple[AgentSessionMessage, ...]
+    latest_user_text: str
+
+
+@dataclass(frozen=True)
 class AgentResult:
     output_text: str
     raw_output: str

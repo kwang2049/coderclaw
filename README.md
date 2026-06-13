@@ -1,8 +1,8 @@
 # CoderClaw
 
-CoderClaw is a local-first agentic coding system that runs the agent and server on the user's machine while letting the user interact through a communication app. The first channel is Slack. The first execution runtime is Codex.
+CoderClaw is a local-first agentic coding system that runs the orchestration service on the user's machine while letting the user interact through a communication app. The first channel is Slack. Coding agents are reached through ACP (Agent Client Protocol).
 
-The long-term design remains runtime-agnostic so the orchestration layer can support other coding agents such as Claude Code, Gemini CLI, and Kiro CLI.
+The long-term design stays agent-agnostic by treating ACP as the boundary between CoderClaw and coding agents.
 
 ## 1. Why This Exists
 
@@ -10,7 +10,8 @@ Most coding agents assume the user is operating the terminal directly. CoderClaw
 
 - the agent runtime stays on the local machine
 - the user communicates through Slack
-- a local Python service coordinates sessions, queueing, supervision, and recovery
+- a local Python service coordinates thread-scoped sessions, queueing, supervision, and recovery
+- ACP carries messages between CoderClaw and the selected coding agent
 - the system can improve its own memory, instructions, and code under controlled rules
 
 ## 2. Current Bootstrap
@@ -20,8 +21,8 @@ The repository now includes a minimal Python service with:
 - a Slack Socket Mode client
 - a durable local message queue with active session recovery
 - a session orchestrator
-- a Codex runtime adapter
-- structured runtime execution metadata on successful runtime calls
+- a Codex CLI runtime adapter from the earlier bootstrap
+- structured execution metadata on successful agent calls
 - a watchdog thread for stale-component and source-change detection
 - a local health endpoint
 - repo-root `AGENTS.md` plus Markdown memory files, with only skills kept under `.coder_home`
@@ -36,8 +37,8 @@ flowchart LR
     S <--> A[Slack Socket Mode Client]
     A --> Q[Durable Local Queue]
     Q --> O[Session Orchestrator]
-    O --> R[Codex Runtime Adapter]
-    R --> X[Codex CLI]
+    O --> A2[ACP Client]
+    A2 --> X[Coding Agent Session]
     O --> M[Memory File and AGENTS.md]
     O --> W[Watchdog]
     W --> O
@@ -59,6 +60,7 @@ memory/
   daily/
 src/
   coderclaw/
+    acp/
     channels/
     runtimes/
     config.py
@@ -241,23 +243,21 @@ Current Slack behavior:
 - appends each handled session exchange to `.coderclaw/sessions/`
 - restores queued and interrupted active messages after process restart
 - automatically restarts on watched source/doc changes after active and queued sessions have completed
-- builds Slack prompt context as up to 10 messages from the relevant tree slice
-- for thread replies, includes only the current branch path up to the incoming message
-- for new top-level channel messages, includes only recent top-level channel messages
+- builds agent input from the relevant Slack thread context
+- treats each Slack thread as a distinct coding-agent session
+- keeps the communication app as a relay for messages into and out of the agent session
 - reacts with `:eyes:` while a request is running
 - replaces the status reaction with `:white_check_mark:` on success or `:x:` on failure
-- runs the message through the Codex runtime adapter
+- sends the message context to the configured ACP-backed coding-agent session
 - posts the result back into the same Slack thread
 
-## 9. Codex Runtime
+## 9. ACP Agent Sessions
 
-The first runtime adapter shells out to:
+The intended agent boundary is ACP (Agent Client Protocol).
 
-```bash
-codex exec -s danger-full-access --skip-git-repo-check "$PROMPT"
-```
+Each communication thread maps to a new coding-agent session. The session context should be exactly the context visible in that thread, plus the repo's static prompt contract and any dynamic Markdown files the agent chooses to inspect for the task.
 
-This is an implementation detail behind the runtime boundary, not a permanent system constraint.
+CoderClaw should not maintain hidden cross-thread agent context. Durable state belongs in explicit project files such as `MEMORY.md`, daily memory files, source files, and session archives.
 
 ## 10. Self-Improvement Principles
 
@@ -270,14 +270,14 @@ This is an implementation detail behind the runtime boundary, not a permanent sy
 ## 11. Near-Term Next Steps
 
 1. Add structured audit logging.
-2. Persist runtime failure metadata for failed adapter calls.
-3. Add a second channel or a second runtime to validate the abstractions.
+2. Replace the legacy Codex CLI adapter with a real ACP transport implementation.
+3. Add configurable ACP agent selection and session startup settings.
 4. Expand Slack handling beyond `app_mention`.
 5. Decide how self-improvement changes are reviewed and applied.
 
 ## 12. Current Status
 
-This is now a runnable bootstrap rather than documentation only. It is still an early skeleton, but the core boundaries for Slack intake, orchestration, Codex execution, memory, and watchdog supervision are in place.
+This is now a runnable bootstrap rather than documentation only. It is still an early skeleton, and the project direction has shifted from direct CLI runtime wrapping toward ACP-backed coding-agent sessions.
 
 Current repository conventions are:
 
@@ -286,7 +286,10 @@ Current repository conventions are:
 - `.coder_home/skills/` is the shared skills store
 - `.agents/skills -> .coder_home/skills` provides Codex-compatible repo-level skill discovery
 - CoderClaw does not set a custom `CODEX_HOME`
-- Slack prompt context is tree-aware and branch-local rather than full-channel history
+- `src/coderclaw/acp/` contains the internal ACP-facing agent client boundary
+- the current executable agent adapter is still the legacy Codex CLI adapter behind that boundary
+- each communication thread should map to a distinct coding-agent session
+- communication apps should relay messages into and out of ACP-backed agent sessions
 - `scripts/install.sh` bootstraps the local environment with `python >= 3.11`
 - `scripts/start.sh` runs CoderClaw in the background via `nohup` and writes timestamped logs under `.coderclaw/logs/`
 - handled sessions are archived under `.coderclaw/sessions/`

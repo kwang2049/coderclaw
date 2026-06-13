@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "coderclaw"
 version = "0.1.0"
-description = "Local-first agentic coding system with Slack as the first communication channel."
+description = "Local-first ACP-backed agentic coding system with Slack as the first communication channel."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [

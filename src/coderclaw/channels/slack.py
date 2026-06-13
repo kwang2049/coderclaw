@@ -89,13 +89,20 @@ class SlackAdapter:
             return None
 
         message_id = f"slack:{event_id}" if event_id else f"slack:{channel_id}:{event_ts}"
+        fallback_context = ContextMessage(
+            channel=ChannelName.SLACK,
+            message_ts=event_ts,
+            thread_ts=thread_ts,
+            user_id=user_id,
+            text=normalized_text,
+        )
         context_messages = tuple(
-            self.fetch_context_messages(
+            self.fetch_thread_context_messages(
                 channel_id=channel_id,
                 event_ts=event_ts,
                 thread_ts=thread_ts,
-                channel_type=channel_type,
-                limit=10,
+                fallback_context=fallback_context,
+                limit=1000,
             )
         )
         return InboundMessage(
@@ -134,51 +141,30 @@ class SlackAdapter:
         self._require_web_client().chat_postMessage(**body)
         self._logger.info("posted Slack reply channel=%s thread_ts=%s", channel_id, thread_ts)
 
-    def fetch_context_messages(
+    def fetch_thread_context_messages(
         self,
         channel_id: str,
         event_ts: str,
         thread_ts: str,
-        channel_type: str,
+        fallback_context: ContextMessage,
         limit: int,
     ) -> list[ContextMessage]:
         if not self._web_client:
-            return []
-
-        if channel_type == "im":
-            try:
-                response = self._require_web_client().conversations_history(channel=channel_id, limit=limit)
-            except SlackApiError:
-                self._logger.exception("failed to fetch Slack DM context channel=%s", channel_id)
-                return []
-            messages = response.get("messages", [])
-            if not isinstance(messages, list):
-                return []
-            context = [_normalize_context_message(raw) for raw in messages]
-            return _filter_and_trim_context(context, limit)
-
-        is_thread_reply = thread_ts and thread_ts != event_ts
-        if is_thread_reply:
-            try:
-                replies = self._require_web_client().conversations_replies(channel=channel_id, ts=thread_ts, limit=limit)
-                reply_messages = replies.get("messages", [])
-                if isinstance(reply_messages, list):
-                    branch = [_normalize_context_message(raw) for raw in reply_messages]
-                    return _filter_and_trim_context(branch, limit, event_ts=event_ts)
-            except SlackApiError:
-                self._logger.exception("failed to fetch Slack thread context channel=%s thread_ts=%s", channel_id, thread_ts)
-            return []
+            return [fallback_context]
 
         try:
-            history = self._require_web_client().conversations_history(channel=channel_id, limit=limit)
-            root_messages = history.get("messages", [])
-            if not isinstance(root_messages, list):
-                return []
-            roots = [_normalize_context_message(raw) for raw in root_messages]
-            return _filter_and_trim_context(roots, limit, event_ts=event_ts)
+            replies = self._require_web_client().conversations_replies(channel=channel_id, ts=thread_ts, limit=limit)
+            reply_messages = replies.get("messages", [])
+            if isinstance(reply_messages, list):
+                context = _filter_and_trim_context(
+                    [_normalize_context_message(raw) for raw in reply_messages],
+                    limit,
+                    event_ts=event_ts,
+                )
+                return context or [fallback_context]
         except SlackApiError:
-            self._logger.exception("failed to fetch Slack channel context channel=%s", channel_id)
-            return []
+            self._logger.exception("failed to fetch Slack thread context channel=%s thread_ts=%s", channel_id, thread_ts)
+        return [fallback_context]
 
     def _handle_socket_request(self, client: SocketModeClient, request: SocketModeRequest) -> None:
         if request.envelope_id:
